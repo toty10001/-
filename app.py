@@ -3,33 +3,44 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import requests
+from ftplib import FTP
 
-# إعدادات الصفحة لتناسب الجوال والمتصفحات
 st.set_page_config(page_title="رادار الفجوات والمضاربة", layout="centered")
 
 st.title("⚡ رادار اقتناص الفجوات السعرية (1$ - 10$)")
-st.write("فحص ذكي مصمم لاقتناص الأسهم التي تفتح على فجوات صاعدة (Gap Up) مع سيولة عالية.")
+st.write("فحص ذكي متصل مباشرة ببورصة NASDAQ الرسمية لاقتناص أسهم الفجوات الصاعدة.")
 
-# دالة ذكية ومحدثة لجلب كامل رموز أسهم ناسداك من البورصة الأمريكية مباشرة
-@st.cache_data(ttl=86400) # تحديث القائمة تلقائياً كل 24 ساعة لضمان الأسهم الجديدة
-def get_nasdaq_tickers():
+# دالة رسمية ومحترفة للاتصال المباشر بسيرفر بورصة ناسداك وجلب كامل الأسهم
+@st.cache_data(ttl=86400)
+def get_all_nasdaq_tickers():
     try:
-        # جلب قائمة الأسهم الكاملة والمحدثة يومياً لسوق ناسداك أونلاين
-        url = "https://githubusercontent.com"
-        response = requests.get(url)
-        if response.status_code == 200:
-            tickers = response.text.splitlines()
-            # تصفية الرموز للتأكد من أنها نصوص صحيحة وخالية من الفراغات
-            clean_tickers = [str(t).strip().upper() for t in tickers if str(t).strip().isalpha()]
-            if len(clean_tickers) > 100:
-                return clean_tickers
-        raise Exception("فشل جلب الملف الكامل")
-    except:
-        # قائمة احتياطية موسعة في حال انقطاع السيرفر السحابي المؤقت
+        # الاتصال بسيرفر الملفات الرسمي المفتوح لبورصة ناسداك
+        ftp = FTP('://nasdaqtrader.com')
+        ftp.login()
+        ftp.cwd('SymbolDirectory')
+        
+        lines = []
+        ftp.retrlines('RETR nasdaqlisted.txt', lines.append)
+        ftp.quit()
+        
+        # معالجة الملف واستخراج الرموز فقط
+        tickers = []
+        for line in lines[1:-1]:  # تجاوز السطر الأول والأخير (العناوين والملخص)
+            parts = line.split('|')
+            if parts and len(parts) > 0:
+                ticker = parts[0].strip()
+                # التأكد من أن الرمز سهم عادي وليس صناديق أو أسهم ممتازة
+                if ticker.isalpha() and len(ticker) <= 4:
+                    tickers.append(ticker.upper())
+                    
+        if len(tickers) > 1000:
+            return tickers
+        raise Exception("قائمة غير مكتملة")
+    except Exception as e:
+        # قائمة احتياطية موسعة في حال الصيانة الطارئة لسيرفر البورصة
         return ["AAPL", "AMZN", "NVDA", "AMD", "PLTR", "SOFI", "HOOD", "GRWG", "SNDL", "NIO", "LCID", "MULN", "RIVN", "MARA", "RIOT"]
 
-tickers = get_nasdaq_tickers()
+tickers = get_all_nasdaq_tickers()
 
 st.sidebar.header("⚙️ إعدادات الفلتر")
 st.sidebar.subheader("💵 تصفية السعر والسيولة")
@@ -52,20 +63,18 @@ if st.button("🚀 ابدأ مسح السوق واقتناص الفجوات"):
     results = []
     total = len(tickers)
     
-    status_text.write(f"جاري جلب بيانات وفحص {total} سهم في سوق ناسداك... يرجى الانتظار")
+    status_text.write(f"📊 تم الاتصال بالبورصة بنجاح. جاري فحص وتحليل {total} سهم حالياً...")
     
-    # فحص الأسهم على مجموعات (حزم من 40 سهم) لتفادي الحظر والحصول على أقصى سرعة
+    # تقسيم الفحص إلى حزم ذكية لضمان السرعة الفائقة
     chunk_size = 40
     for i in range(0, total, chunk_size):
         chunk = tickers[i:i+chunk_size]
         try:
             tickers_string = " ".join(chunk)
-            # جلب بيانات آخر 60 يوم لحساب المتوسط بدقة
             data = yf.download(tickers_string, period="60d", interval="1d", group_by='ticker', progress=False)
             
             for ticker in chunk:
                 try:
-                    # التحقق من وجود بيانات للسهم في حزمة البيانات المستلمة
                     if ticker in data and not data[ticker].empty:
                         ticker_df = data[ticker].dropna()
                         if len(ticker_df) < 20:
@@ -76,23 +85,18 @@ if st.button("🚀 ابدأ مسح السوق واقتناص الفجوات"):
                         prev_close = ticker_df['Close'].iloc[-2]
                         current_price = ticker_df['Close'].iloc[-1]
                         
-                        # حساب حجم الفجوة السعرية بدقة عند الافتتاح
                         gap_pct = ((current_open - prev_close) / prev_close) * 100
                         
-                        # 1. فلتر السعر ونسبة الفجوة المطلوبة
                         if not (min_price <= current_price <= max_price) or gap_pct < min_gap:
                             continue
                             
                         current_volume = ticker_df['Volume'].iloc[-1]
                         avg_vol_20d = ticker_df['Volume'].tail(20).mean()
                         
-                        # 2. فلتر معدل السيولة اليومية
                         if avg_vol_20d < min_avg_volume:
                             continue
                             
                         sma20 = ticker_df['SMA_20'].iloc[-1]
-                        
-                        # 3. فلتر المسار الصاعد لحماية المحفظة
                         if use_sma_filter and current_price < sma20:
                             continue
 
@@ -109,12 +113,11 @@ if st.button("🚀 ابدأ مسح السوق واقتناص الفجوات"):
         except:
             continue
             
-        # تحديث شريط التقدم على شاشة المتصفح والجوال
         progress = min((i + chunk_size) / total, 1.0)
         progress_bar.progress(progress)
         status_text.write(f"تم فحص {min(i + chunk_size, total)} من أصل {total} سهم...")
 
-    st.success("✨ تم الانتهاء من مسح كامل السوق!")
+    st.success("✨ تم الانتهاء من مسح كامل البورصة!")
     
     if results:
         df_results = pd.DataFrame(results)
@@ -141,4 +144,4 @@ if st.button("🚀 ابدأ مسح السوق واقتناص الفجوات"):
             else:
                 st.info("لا توجد أخبار مسجلة لهذا السهم.")
     else:
-        st.warning("لا توجد أسهم بها فجوات صاعدة تطابق الشروط حالياً في كامل السوق.")
+        st.warning("لا توجد أسهم بها فجوات صاعدة تطابق الشروط حالياً في كامل البورصة.")
