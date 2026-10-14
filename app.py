@@ -5,15 +5,14 @@ import numpy as np
 import plotly.graph_objects as go
 import time
 
-st.set_page_config(page_title="رادار الفجوات والمضاربة الكامل", layout="centered")
+st.set_page_config(page_title="رادار الفجوات الفني والأسعار", layout="centered")
 
-st.title("⚡ رادار اقتناص الفجوات السعرية (1$ - 10$)")
-st.write("فحص شامل ومستقر لكامل بورصة NASDAQ ومضاربات السوق الأمريكي بدون قيود.")
+st.title("⚡ رادار الفجوات مع الأهداف الفنية التلقائية")
+st.write("فحص شامل لكامل السوق مع تحديد أهداف جني الأرباح ووقف الخسارة بناءً على قراءة الشارت الحالية.")
 
-# قائمة ثابتة ومدمجة بالكامل تحتوي على أكثر من 2600 سهم من أسهم المضاربة والسوق الأمريكي
+# قائمة الأسهم المدمجة والمستقرة لكامل السوق
 @st.cache_data(ttl=86400)
 def get_static_nasdaq_tickers():
-    # تم دمج رموز السوق بالكامل لضمان تشغيل الفحص على آلاف الأسهم فوراً
     tickers = [
         "AAPL", "AMZN", "NVDA", "AMD", "PLTR", "SOFI", "HOOD", "GRWG", "SNDL", "NIO", 
         "LCID", "MULN", "RIVN", "MARA", "RIOT", "TSLA", "META", "GOOGL", "MSFT", "NFLX",
@@ -29,8 +28,6 @@ def get_static_nasdaq_tickers():
         "IIPR", "WKHS", "RIDE", "GOEV", "HYLN", "FSR", "FFIE", "ARVL", "ELMS", "INDI", 
         "AEVA", "MVIS", "LAZR", "OUST", "VLDR", "INVZ", "LIDR", "BLZE", "PTRA", "ACTC"
     ]
-    
-    # مصفوفة توليد ذكية لتوسيع النطاق آلياً ليشمل أكثر من 2500 رمز سهم ومضاربة شائعة
     letters = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"]
     extended = set(tickers)
     for base in tickers[:90]:
@@ -38,21 +35,15 @@ def get_static_nasdaq_tickers():
             extended.add(f"{base[:-1]}{l1}")
             for l2 in letters[:2]:
                 extended.add(f"{base[:-2]}{l1}{l2}")
-                
     return sorted([t for t in extended if len(t) <= 4])
 
 all_tickers = get_static_nasdaq_tickers()
 
-st.sidebar.header("⚙️ إعدادات الفلتر")
-st.sidebar.subheader("💵 تصفية السعر والسيولة")
+st.sidebar.header("⚙️ إعدادات الفلتر الفني")
 min_price = st.sidebar.number_input("الحد الأدنى للسعر ($)", min_value=0.1, value=1.0)
 max_price = st.sidebar.number_input("الحد الأقصى للسعر ($)", min_value=0.1, value=10.0)
 min_avg_volume = st.sidebar.number_input("معدل التداول (Avg Volume 20d)", min_value=0, value=300000, step=50000)
-
-st.sidebar.subheader("🚀 فلتر الفجوات السعرية (Gap Up)")
 min_gap = st.sidebar.number_input("الحد الأدنى للفجوة السعرية (%)", min_value=0.0, max_value=100.0, value=3.0)
-
-st.sidebar.subheader("📊 المتوسطات والمؤشرات الفنية")
 use_sma_filter = st.sidebar.checkbox("أن يكون السعر فوق متوسط 20 يوم (SMA 20)", value=True)
 
 if st.button("🚀 ابدأ مسح كامل السوق واقتناص الفجوات"):
@@ -61,7 +52,7 @@ if st.button("🚀 ابدأ مسح كامل السوق واقتناص الفجو
     results = []
     total = len(all_tickers)
     
-    status_text.write(f"📊 جاري فحص وتحليل {total} سهم نشط في السوق الأمريكي... يرجى الانتظار")
+    status_text.write(f"📊 جاري فحص وتحليل {total} سهم بشكل فني... يرجى الانتظار")
     
     chunk_size = 35
     for i in range(0, total, chunk_size):
@@ -81,6 +72,7 @@ if st.button("🚀 ابدأ مسح كامل السوق واقتناص الفجو
                         current_open = ticker_df['Open'].iloc[-1]
                         prev_close = ticker_df['Close'].iloc[-2]
                         current_price = ticker_df['Close'].iloc[-1]
+                        current_low = ticker_df['Low'].iloc[-1]
                         
                         gap_pct = ((current_open - prev_close) / prev_close) * 100
                         
@@ -97,13 +89,23 @@ if st.button("🚀 ابدأ مسح كامل السوق واقتناص الفجو
                         if use_sma_filter and current_price < sma20:
                             continue
 
+                        # الحسابات الفنية بناءً على الشارت الحالي:
+                        entry_price = current_price 
+                        stop_loss = current_low if current_low < entry_price else entry_price * 0.95
+                        risk_per_share = entry_price - stop_loss
+                        
+                        if risk_per_share <= 0:
+                            risk_per_share = entry_price * 0.02
+                            
+                        # حساب جني الأرباح بناءً على ضعف النطاق السعري للمخاطرة (1:2)
+                        take_profit = entry_price + (risk_per_share * 2)
+
                         results.append({
                             "الرمز": ticker,
-                            "السعر الحالي ($)": round(current_price, 2),
-                            "الفجوة عند الافتتاح (%)": f"+{round(gap_pct, 2)}%",
-                            "حجم اليوم (Vol)": f"{round(current_volume / 1_000, 1)}K" if current_volume < 1_000_000 else f"{round(current_volume / 1_000_000, 2)}M",
-                            "معدل الفوليوم 20 يوم": f"{round(avg_vol_20d / 1_000, 1)}K" if avg_vol_20d < 1_000_000 else f"{round(avg_vol_20d / 1_000_000, 2)}M",
-                            "SMA 20 ($)": round(sma20, 2)
+                            "السعر الحالي (الدخول)": round(entry_price, 2),
+                            "الفجوة (%)": f"+{round(gap_pct, 2)}%",
+                            "وقف الخسارة ($)": round(stop_loss, 2),
+                            "جني الأرباح ($)": round(take_profit, 2)
                         })
                 except:
                     continue
@@ -111,7 +113,6 @@ if st.button("🚀 ابدأ مسح كامل السوق واقتناص الفجو
             continue
         
         time.sleep(0.05)
-        
         progress = min((i + chunk_size) / total, 1.0)
         progress_bar.progress(progress)
         status_text.write(f"تم فحص {min(i + chunk_size, total)} من أصل {total} سهم...")
