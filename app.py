@@ -214,12 +214,12 @@ if st.button("🚀 ابدأ مسح الرادار الفني وقراءة الش
                                         target_2 = target_1 + (risk * 2)
                                         reward_risk_ratio = (target_1 - entry_price) / risk
                                         
-                                        results.append({
-                                            "الرمز": ticker,
-                                            "السعر الحالي ($)": round(entry_price, 2),
-                                            "نوع الإشارة الفنية": analysis['signal_type'],
-                                            "التقييم الرقمي (100)": analysis['score'],
-                                            "وقف الخسارة ($)": round(stop_loss, 2),
-                                            "الهدف الأول ($)": round(target_1, 2),
-                                            "الهدف الثاني ($)": round(target_2, 2),
-                                            "العائد للمخاطرة R": round(reward_risk_ratio, 2),
+                                        item_data = {}
+                                        item_data["الرمز"] = ticker
+                                        item_data["السعر الحالي ($)"] = round(entry_price, 2)
+                                        item_data["نوع الإشارة الفنية"] = analysis['signal_type']
+                                        item_data["التقييم الرقمي (100)"] = analysis['score']
+                                        item_data["وقف الخسارة ($)"] = round(stop_loss, 2)
+                                        item_data["الهدف الأول ($)"] = round(target_1, 2)
+                                        item_data["الهدف الثاني ($)"] = round(target_2, 2)
+                                        item_data["العائد للمخاطرة R"] = round(reward_risk_ratio, 2)
