@@ -83,7 +83,6 @@ def analyze_market_structure(df, spy_df):
     df['EMA_50'] = df['Close'].ewm(span=50, adjust=False).mean()
     
     last_close = df['Close'].iloc[-1]
-    ema9 = df['EMA_9'].iloc[-1]
     ema20 = df['EMA_20'].iloc[-1]
     ema50 = df['EMA_50'].iloc[-1]
     
@@ -197,38 +196,30 @@ if st.button("🚀 ابدأ مسح الرادار الفني وقراءة الش
                 try:
                     if ticker in data and not data[ticker].empty:
                         df = data[ticker].dropna()
-                        if len(df) < 30:
-                            continue
+                        if len(df) >= 30:
+                            current_price = df['Close'].iloc[-1]
                             
-                        current_price = df['Close'].iloc[-1]
-                        
-                        if not (min_price <= current_price <= max_price):
-                            continue
-                            
-                        analysis = analyze_market_structure(df, spy_data)
-                        if analysis is None or analysis['avg_volume'] < min_volume:
-                            continue
-                        
-                        entry_price = current_price
-                        stop_loss = analysis['support'] if analysis['support'] < entry_price else entry_price * 0.95
-                        risk = entry_price - stop_loss
-                        
-                        if risk <= 0:
-                            risk = entry_price * 0.02
-                            
-                        target_1 = analysis['resistance'] if analysis['resistance'] > entry_price else entry_price + (risk * 1.5)
-                        target_2 = target_1 + (risk * 2)
-                        reward_risk_ratio = (target_1 - entry_price) / risk
-                        
-                        if analysis['signal_type'] != "انتظار بناء البنية":
-                            results.append({
-                                "الرمز": ticker,
-                                "السعر الحالي ($)": round(entry_price, 2),
-                                "نوع الإشارة الفنية": analysis['signal_type'],
-                                "التقييم الرقمي (100)": analysis['score'],
-                                "وقف الخسارة ($)": round(stop_loss, 2),
-                                "الهدف الأول ($)": round(target_1, 2),
-                                "الهدف الثاني ($)": round(target_2, 2),
-                                "العائد للمخاطرة R": round(reward_risk_ratio, 2),
-                                "سبب التوصية": f"انكماش التقلبات وقرب السعر من المقاومة بنسبة {round(analysis['pct_to_resistance'], 1)}%"
-                            })
+                            if min_price <= current_price <= max_price:
+                                analysis = analyze_market_structure(df, spy_data)
+                                if analysis is not None and analysis['avg_volume'] >= min_volume:
+                                    if analysis['signal_type'] != "انتظار بناء البنية":
+                                        entry_price = current_price
+                                        stop_loss = analysis['support'] if analysis['support'] < entry_price else entry_price * 0.95
+                                        risk = entry_price - stop_loss
+                                        
+                                        if risk <= 0:
+                                            risk = entry_price * 0.02
+                                            
+                                        target_1 = analysis['resistance'] if analysis['resistance'] > entry_price else entry_price + (risk * 1.5)
+                                        target_2 = target_1 + (risk * 2)
+                                        reward_risk_ratio = (target_1 - entry_price) / risk
+                                        
+                                        results.append({
+                                            "الرمز": ticker,
+                                            "السعر الحالي ($)": round(entry_price, 2),
+                                            "نوع الإشارة الفنية": analysis['signal_type'],
+                                            "التقييم الرقمي (100)": analysis['score'],
+                                            "وقف الخسارة ($)": round(stop_loss, 2),
+                                            "الهدف الأول ($)": round(target_1, 2),
+                                            "الهدف الثاني ($)": round(target_2, 2),
+                                            "العائد للمخاطرة R": round(reward_risk_ratio, 2),
