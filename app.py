@@ -232,4 +232,3 @@ if st.button("🚀 ابدأ مسح الرادار الفني وقراءة الش
                                 "العائد للمخاطرة R": round(reward_risk_ratio, 2),
                                 "سبب التوصية": f"انكماش التقلبات وقرب السعر من المقاومة بنسبة {round(analysis['pct_to_resistance'], 1)}%"
                             })
-                except:
