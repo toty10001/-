@@ -9,13 +9,13 @@ from datetime import datetime
 # ==================================================
 # 🌐 إعدادات المنصة الاحترافية والواجهة
 # ==================================================
-st.set_page_config(page_title="الرادار الكمي الاحترافي - السوق الأمريكي", layout="wide")
+st.set_page_config(page_title="الرادار الكمي الاحترافي - المضاربة اليومية", layout="wide")
 
-st.title("🦅 الرادار الكمي الاحترافي لتصفية وقراءة الشارت (1$ - 10$)")
-st.write("منصة مجانية 100% لتحليل البنية السعرية، انكماش التقلبات، وتحديد الفرص قبل الانطلاق الفعلي.")
+st.title("🦅 الرادار الكمي الاحترافي للمضاربة اللحظية (1$ - 10$)")
+st.write("منصة مجانية مخصصة لاكتشاف الاختراقات الحقيقية وانكماش التقلبات بدقة عالية.")
 
 # ==================================================
-# 📦 قائمة الأسهم المدمجة المستقرة (تمنع حظر السيرفر)
+# 📦 قائمة الأسهم المدمجة المستقرة
 # ==================================================
 @st.cache_data(ttl=86400)
 def get_comprehensive_watchlist():
@@ -43,21 +43,21 @@ all_tickers = get_comprehensive_watchlist()
 # ==================================================
 # ⚙️ لوحة تحكم الإعدادات الجانبية الفنية والكمية
 # ==================================================
-st.sidebar.header("⚙️ معايير التصفية والتقييم")
+st.sidebar.header("⚙️ معايير الفلترة للمضارب")
 
 st.sidebar.subheader("💵 تصفية السعر والسيولة")
 min_price = st.sidebar.number_input("الحد الأدنى للسعر ($)", min_value=0.1, value=1.0)
 max_price = st.sidebar.number_input("الحد الأقصى للسعر ($)", min_value=0.1, value=10.0)
-min_volume = st.sidebar.number_input("معدل التداول اليومي (SMA 20 Vol)", min_value=10000, value=300000)
+min_volume = st.sidebar.number_input("متوسط التداول اليومي (SMA 20 Vol - لضمان السيولة)", min_value=10000, value=300000)
 
 st.sidebar.subheader("⏱️ إدارة الأطر والبيانات")
-time_horizon = st.sidebar.selectbox("الإطار الزمني الأساسي للإشارات", ["يومي (Context)", "5 دقائق اللحظي (Extended Hours)"])
+time_horizon = st.sidebar.selectbox("الإطار الزمني الأساسي للإشارات", ["يومي (Context)", "لحظي مع التذبذب الحالي"])
 
 st.sidebar.subheader("💯 تعديل أوزان التقييم الرقمي")
 w_trend = st.sidebar.slider("وزن الاتجاه العام", 0, 30, 15)
 w_break = st.sidebar.slider("وزن القرب من المقاومة والجودة", 0, 30, 20)
 w_vcp = st.sidebar.slider("وزن انكماش التقلبات VCP", 0, 30, 20)
-w_vol = st.sidebar.slider("وزن تأكيد الحجم والسيولة", 0, 30, 15)
+w_vol = st.sidebar.slider("وزن طفرة الحجم اليومي", 0, 30, 15)
 w_market = st.sidebar.slider("وزن القوة النسبية ضد السوق", 0, 30, 15)
 w_vwap = st.sidebar.slider("وزن التموقع حول خط الـ VWAP", 0, 30, 15)
 
@@ -100,7 +100,10 @@ def analyze_market_structure(df, spy_df):
     df['Vol_SMA20'] = df['Volume'].rolling(window=20).mean()
     last_vol = df['Volume'].iloc[-1]
     avg_vol = df['Vol_SMA20'].iloc[-1]
-    analysis['vol_surge'] = last_vol > avg_vol
+    
+    # تحسين المضاربة: التأكد من أن حجم اليوم قوي أو على الأقل يقارب المتوسط لكي لا يكون السهم ميتاً
+    analysis['vol_surge'] = last_vol >= (avg_vol * 0.8) 
+    analysis['is_high_volume'] = last_vol > avg_vol
     analysis['avg_volume'] = avg_vol
     
     typical_price = (df['High'] + df['Low'] + df['Close']) / 3
@@ -128,7 +131,7 @@ def analyze_market_structure(df, spy_df):
     else:
         breakdown['انكماش VCP'] = 0
         
-    if analysis['vol_surge']:
+    if analysis['is_high_volume']:
         score += w_vol
         breakdown['حجم التداول'] = w_vol
     else:
@@ -149,8 +152,9 @@ def analyze_market_structure(df, spy_df):
     analysis['score'] = score
     analysis['breakdown'] = breakdown
     
-    if last_close > recent_highs and analysis['vol_surge']:
-        analysis['signal_type'] = "اختراق مؤكد ومثبت"
+    # تصنيف دقيق لمراحل المضاربة
+    if last_close > recent_highs and analysis['is_high_volume']:
+        analysis['signal_type'] = "اختراق مؤكد ومثبت (حجم عالي)"
     elif last_close > recent_highs:
         analysis['signal_type'] = "اختراق أولي قيد التأكيد"
     elif analysis['pct_to_resistance'] <= 3.0 and analysis['vcp_compression']:
@@ -179,6 +183,7 @@ def process_single_ticker(ticker, data, spy_data, min_price, max_price, min_volu
         if analysis is None or analysis['avg_volume'] < min_volume:
             return None
             
+        # استبعاد الأسهم غير الجاهزة للمضاربة الحالية
         if analysis['signal_type'] == "انتظار بناء البنية":
             return None
             
@@ -190,7 +195,7 @@ def process_single_ticker(ticker, data, spy_data, min_price, max_price, min_volu
             
         target_1 = analysis['resistance'] if analysis['resistance'] > entry_price else entry_price + (risk * 1.5)
         target_2 = target_1 + (risk * 2)
-        reward_risk_ratio = (target_1 - entry_price) / risk
+        reward_risk_ratio = round((target_1 - entry_price) / risk, 2)
         
         item_data = {
             "الرمز": ticker,
@@ -199,9 +204,8 @@ def process_single_ticker(ticker, data, spy_data, min_price, max_price, min_volu
             "التقييم الرقمي (100)": analysis['score'],
             "وقف الخسارة ($)": round(stop_loss, 2),
             "الهدف الأول ($)": round(target_1, 2),
-            "الهدف الثاني ($)": round(target_2, 2),
-            "العائد للمخاطرة R": round(reward_risk_ratio, 2),
-            "سبب التوصية": f"انكماش التقلبات وقرب المقاومة بنسبة {round(analysis['pct_to_resistance'], 1)}%"
+            "العائد للمخاطرة R": reward_risk_ratio,
+            "سبب الظهور والجاهزية": f"انكماش التقلبات، قرب المقاومة بنسبة {round(analysis['pct_to_resistance'], 1)}%، مع سيولة مستقرة."
         }
         return item_data
     except Exception:
@@ -212,7 +216,7 @@ def process_single_ticker(ticker, data, spy_data, min_price, max_price, min_volu
 # ==================================================
 if st.button("🚀 ابدأ مسح الرادار الفني وقراءة الشارت الفعلي"):
     now_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    st.info(f"⏱️ آخر تحديث للرادار المالي الحية: {now_time} (بيانات السوق متأخرة 15 دقيقة مجاناً ومحدثة لحظياً للـ Extended Hours)")
+    st.info(f"⏱️ آخر تحديث للرادار اللحظي: {now_time} (بيانات الأسعار متأخرة 15 دقيقة ومحدثة لنطاق التداول)")
     
     progress_bar = st.progress(0)
     status_text = st.empty()
@@ -238,11 +242,12 @@ if st.button("🚀 ابدأ مسح الرادار الفني وقراءة الش
             
         progress = min((i + chunk_size) / total_ticks, 1.0)
         progress_bar.progress(progress)
-        status_text.write(f"تم مسح وتحليل الشموع لـ {min(i + chunk_size, total_ticks)} سهم...")
+        status_text.write(f"جاري فحص الأسهم ومطابقة المعايير لـ {min(i + chunk_size, total_ticks)} سهم...")
         
-    st.success("✨ تم الانتهاء من مسح كامل البورصة بدقة كمية واحترافية!")
+    st.success("✨ تم الانتهاء من مسح السوق وتصفية الفرص الحقيقية بنجاح!")
     
     if results:
         df_results = pd.DataFrame(results).sort_values(by="التقييم الرقمي (100)", ascending=False)
         st.dataframe(df_results, use_container_width=True)
-        
+    else:
+        st.warning("⚠️ لم يتم العثور على أسهم تطابق الشروط الصارمة حالياً (قد يكون السوق في حالة هدوء أو تذبذب عرضي).")
