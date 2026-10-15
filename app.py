@@ -170,6 +170,52 @@ def analyze_market_structure(df, spy_df):
         
     return analysis
 
+# دالة مضافة كمياً لمعالجة السهم الفردي بشكل معزول يمنع تماماً أخطاء التداخل والمسافات الفراغية
+def process_single_ticker(ticker, data, spy_data, min_price, max_price, min_volume):
+    try:
+        if ticker not in data or data[ticker].empty:
+            return None
+            
+        df = data[ticker].dropna()
+        if len(df) < 30:
+            return None
+            
+        current_price = df['Close'].iloc[-1]
+        if not (min_price <= current_price <= max_price):
+            return None
+            
+        analysis = analyze_market_structure(df, spy_data)
+        if analysis is None or analysis['avg_volume'] < min_volume:
+            return None
+            
+        if analysis['signal_type'] == "انتظار بناء البنية":
+            return None
+            
+        entry_price = current_price
+        stop_loss = analysis['support'] if analysis['support'] < entry_price else entry_price * 0.95
+        risk = entry_price - stop_loss
+        if risk <= 0:
+            risk = entry_price * 0.02
+            
+        target_1 = analysis['resistance'] if analysis['resistance'] > entry_price else entry_price + (risk * 1.5)
+        target_2 = target_1 + (risk * 2)
+        reward_risk_ratio = (target_1 - entry_price) / risk
+        
+        item_data = {
+            "الرمز": ticker,
+            "السعر الحالي ($)": round(entry_price, 2),
+            "نوع الإشارة الفنية": analysis['signal_type'],
+            "التقييم الرقمي (100)": analysis['score'],
+            "وقف الخسارة ($)": round(stop_loss, 2),
+            "الهدف الأول ($)": round(target_1, 2),
+            "الهدف الثاني ($)": round(target_2, 2),
+            "العائد للمخاطرة R": round(reward_risk_ratio, 2),
+            "سبب التوصية": f"انكماش التقلبات وقرب المقاومة بنسبة {round(analysis['pct_to_resistance'], 1)}%"
+        }
+        return item_data
+    except Exception:
+        return None
+
 # ==================================================
 # 🚀 محرك تشغيل الفحص والواجهة
 # ==================================================
@@ -193,33 +239,11 @@ if st.button("🚀 ابدأ مسح الرادار الفني وقراءة الش
             data = yf.download(tickers_string, period="60d", interval="1d", group_by='ticker', progress=False, include_postpre=True)
             
             for ticker in chunk:
-                try:
-                    if ticker in data and not data[ticker].empty:
-                        df = data[ticker].dropna()
-                        if len(df) >= 30:
-                            current_price = df['Close'].iloc[-1]
-                            
-                            if min_price <= current_price <= max_price:
-                                analysis = analyze_market_structure(df, spy_data)
-                                if analysis is not None and analysis['avg_volume'] >= min_volume:
-                                    if analysis['signal_type'] != "انتظار بناء البنية":
-                                        entry_price = current_price
-                                        stop_loss = analysis['support'] if analysis['support'] < entry_price else entry_price * 0.95
-                                        risk = entry_price - stop_loss
-                                        
-                                        if risk <= 0:
-                                            risk = entry_price * 0.02
-                                            
-                                        target_1 = analysis['resistance'] if analysis['resistance'] > entry_price else entry_price + (risk * 1.5)
-                                        target_2 = target_1 + (risk * 2)
-                                        reward_risk_ratio = (target_1 - entry_price) / risk
-                                        
-                                        item_data = {}
-                                        item_data["الرمز"] = ticker
-                                        item_data["السعر الحالي ($)"] = round(entry_price, 2)
-                                        item_data["نوع الإشارة الفنية"] = analysis['signal_type']
-                                        item_data["التقييم الرقمي (100)"] = analysis['score']
-                                        item_data["وقف الخسارة ($)"] = round(stop_loss, 2)
-                                        item_data["الهدف الأول ($)"] = round(target_1, 2)
-                                        item_data["الهدف الثاني ($)"] = round(target_2, 2)
-                                        item_data["العائد للمخاطرة R"] = round(reward_risk_ratio, 2)
+                item_data = process_single_ticker(ticker, data, spy_data, min_price, max_price, min_volume)
+                if item_data is not None:
+                    results.append(item_data)
+        except Exception:
+            pass
+            
+        progress = min((i + chunk_size) / total_ticks, 1.0)
+        progress_bar.progress(progress)
