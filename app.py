@@ -11,14 +11,6 @@ from datetime import datetime
 # ==================================================
 st.set_page_config(page_title="الرادار الكمي الاحترافي - السوق الأمريكي", layout="wide")
 
-st.markdown("""
-    <style>
-    .reportview-container .main .block-container{ max-width: 95%; }
-    th { text-align: right !important; }
-    td { text-align: right !important; }
-    </style>
-""", unsafe_allowed_html=True)
-
 st.title("🦅 الرادار الكمي الاحترافي لتصفية وقراءة الشارت (1$ - 10$)")
 st.write("منصة مجانية 100% لتحليل البنية السعرية، انكماش التقلبات، وتحديد الفرص قبل الانطلاق الفعلي.")
 
@@ -170,7 +162,6 @@ def analyze_market_structure(df, spy_df):
         
     return analysis
 
-# دالة مضافة كمياً لمعالجة السهم الفردي بشكل معزول يمنع تماماً أخطاء التداخل والمسافات الفراغية
 def process_single_ticker(ticker, data, spy_data, min_price, max_price, min_volume):
     try:
         if ticker not in data or data[ticker].empty:
@@ -247,3 +238,11 @@ if st.button("🚀 ابدأ مسح الرادار الفني وقراءة الش
             
         progress = min((i + chunk_size) / total_ticks, 1.0)
         progress_bar.progress(progress)
+        status_text.write(f"تم مسح وتحليل الشموع لـ {min(i + chunk_size, total_ticks)} سهم...")
+        
+    st.success("✨ تم الانتهاء من مسح كامل البورصة بدقة كمية واحترافية!")
+    
+    if results:
+        df_results = pd.DataFrame(results).sort_values(by="التقييم الرقمي (100)", ascending=False)
+        st.dataframe(df_results, use_container_width=True)
+        
