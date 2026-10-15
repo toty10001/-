@@ -192,7 +192,6 @@ def analyze_market_structure(df, spy_df):
 # 🚀 محرك تشغيل الفحص والواجهة
 # ==================================================
 if st.button("🚀 ابدأ مسح الرادار الفني وقراءة الشارت الفعلي"):
-    # تأكيد تحديث الوقت والبيانات المجانية المتاحة الممتدة لـ 24 ساعة
     now_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     st.info(f"⏱️ آخر تحديث للرادار المالي الحية: {now_time} (بيانات السوق متأخرة 15 دقيقة مجاناً ومحدثة لحظياً للـ Extended Hours)")
     
@@ -200,7 +199,6 @@ if st.button("🚀 ابدأ مسح الرادار الفني وقراءة الش
     status_text = st.empty()
     results = []
     
-    # جلب مؤشر السوق للمقارنة التلقائية مجاناً
     spy_data = yf.download("SPY", period="60d", interval="1d", progress=False)
     
     chunk_size = 35
@@ -210,7 +208,6 @@ if st.button("🚀 ابدأ مسح الرادار الفني وقراءة الش
         chunk = all_tickers[i:i+chunk_size]
         try:
             tickers_string = " ".join(chunk)
-            # جلب البيانات الشاملة مع تفعيل الفترات الليلية والممتدة تلقائياً
             data = yf.download(tickers_string, period="60d", interval="1d", group_by='ticker', progress=False, include_postpre=True)
             
             for ticker in chunk:
@@ -222,7 +219,6 @@ if st.button("🚀 ابدأ مسح الرادار الفني وقراءة الش
                             
                         current_price = df['Close'].iloc[-1]
                         
-                        # تصفية قيود السعر والسيولة المطلوبة لحماية الحساب
                         if not (min_price <= current_price <= max_price):
                             continue
                             
@@ -230,7 +226,6 @@ if st.button("🚀 ابدأ مسح الرادار الفني وقراءة الش
                         if analysis is None or analysis['avg_volume'] < min_volume:
                             continue
                         
-                        # تصفية وحساب أهداف الخروج والوقف الفنية بالمليم بناءً على البنية
                         entry_price = current_price
                         stop_loss = analysis['support'] if analysis['support'] < entry_price else entry_price * 0.95
                         risk = entry_price - stop_loss
@@ -238,5 +233,11 @@ if st.button("🚀 ابدأ مسح الرادار الفني وقراءة الش
                         if risk <= 0:
                             risk = entry_price * 0.02
                             
-                        # احتساب أهداف المقاومات التراكمية بناءً على الشارت
                         target_1 = analysis['resistance'] if analysis['resistance'] > entry_price else entry_price + (risk * 1.5)
+                        target_2 = target_1 + (risk * 2)
+                        reward_risk_ratio = (target_1 - entry_price) / risk
+                        
+                        if analysis['signal_type'] != "انتظار بناء البنية":
+                            results.append({
+                                "الرمز": ticker,
+                                "السعر الحالي ($)": round(entry_price, 2),
