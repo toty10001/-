@@ -53,17 +53,14 @@ all_tickers = get_comprehensive_watchlist()
 # ==================================================
 st.sidebar.header("⚙️ معايير التصفية والتقييم")
 
-# تخصيص الحدود السعرية والسيولة
 st.sidebar.subheader("💵 تصفية السعر والسيولة")
 min_price = st.sidebar.number_input("الحد الأدنى للسعر ($)", min_value=0.1, value=1.0)
 max_price = st.sidebar.number_input("الحد الأقصى للسعر ($)", min_value=0.1, value=10.0)
 min_volume = st.sidebar.number_input("معدل التداول اليومي (SMA 20 Vol)", min_value=10000, value=300000)
 
-# تفعيل وإطفاء الأطر الزمنية
 st.sidebar.subheader("⏱️ إدارة الأطر والبيانات")
 time_horizon = st.sidebar.selectbox("الإطار الزمني الأساسي للإشارات", ["يومي (Context)", "5 دقائق اللحظي (Extended Hours)"])
 
-# تخصيص أوزان التقييم الرقمي من 100
 st.sidebar.subheader("💯 تعديل أوزان التقييم الرقمي")
 w_trend = st.sidebar.slider("وزن الاتجاه العام", 0, 30, 15)
 w_break = st.sidebar.slider("وزن القرب من المقاومة والجودة", 0, 30, 20)
@@ -81,7 +78,6 @@ def analyze_market_structure(df, spy_df):
     
     analysis = {}
     
-    # أ) الاتجاه العام (EMA 9, 20, 50)
     df['EMA_9'] = df['Close'].ewm(span=9, adjust=False).mean()
     df['EMA_20'] = df['Close'].ewm(span=20, adjust=False).mean()
     df['EMA_50'] = df['Close'].ewm(span=50, adjust=False).mean()
@@ -91,7 +87,6 @@ def analyze_market_structure(df, spy_df):
     ema20 = df['EMA_20'].iloc[-1]
     ema50 = df['EMA_50'].iloc[-1]
     
-    # ب) البنية السعرية والمقاومات والقيعان (قراءة الشارت الفعلي)
     recent_highs = df['High'].tail(20).max()
     recent_lows = df['Low'].tail(20).min()
     
@@ -99,13 +94,11 @@ def analyze_market_structure(df, spy_df):
     analysis['support'] = recent_lows
     analysis['pct_to_resistance'] = ((recent_highs - last_close) / last_close) * 100
     
-    # ج) حساب انكماش التقلبات والـ ATR
     high_low_pct = ((df['High'] - df['Low']) / df['Close']) * 100
     atr_5 = high_low_pct.tail(5).mean()
     atr_20 = high_low_pct.tail(20).mean()
-    analysis['vcp_compression'] = atr_5 < (atr_20 * 0.85) # انكماش فني بنسبة 15%
+    analysis['vcp_compression'] = atr_5 < (atr_20 * 0.85)
     
-    # د) حساب القوة النسبية مقارنة بـ SPY
     if spy_df is not None and len(spy_df) >= len(df):
         stock_perf = df['Close'].pct_change(20).iloc[-1]
         spy_perf = spy_df['Close'].pct_change(20).iloc[-1]
@@ -113,58 +106,49 @@ def analyze_market_structure(df, spy_df):
     else:
         analysis['relative_strength'] = False
         
-    # هـ) الحجم والسيولة العادية والتراكمية
     df['Vol_SMA20'] = df['Volume'].rolling(window=20).mean()
     last_vol = df['Volume'].iloc[-1]
     avg_vol = df['Vol_SMA20'].iloc[-1]
     analysis['vol_surge'] = last_vol > avg_vol
     analysis['avg_volume'] = avg_vol
     
-    # و) حساب الـ VWAP التقريبي اللحظي
     typical_price = (df['High'] + df['Low'] + df['Close']) / 3
     df['vwap'] = (typical_price * df['Volume']).rolling(window=14).sum() / df['Volume'].rolling(window=14).sum()
     analysis['above_vwap'] = last_close > df['vwap'].iloc[-1]
     
-    # 💯 نظام حساب النقاط التراكمي الديناميكي
     score = 0
     breakdown = {}
     
-    # الاتجاه
     if last_close > ema20 > ema50:
         score += w_trend
         breakdown['الاتجاه'] = w_trend
     else:
         breakdown['الاتجاه'] = 0
         
-    # المقاومة والاختراق
     if analysis['pct_to_resistance'] <= 3.0:
         score += w_break
         breakdown['القرب من الاختراق'] = w_break
     else:
         breakdown['القرب من الاختراق'] = 0
         
-    # انكماش التقلبات
     if analysis['vcp_compression']:
         score += w_vcp
         breakdown['انكماش VCP'] = w_vcp
     else:
         breakdown['انكماش VCP'] = 0
         
-    # الحجم
     if analysis['vol_surge']:
         score += w_vol
         breakdown['حجم التداول'] = w_vol
     else:
         breakdown['حجم التداول'] = 0
         
-    # السوق والقوة النسبية
     if analysis['relative_strength']:
         score += w_market
         breakdown['القوة النسبية'] = w_market
     else:
         breakdown['القوة النسبية'] = 0
         
-    # التموقع السعري الفني
     if analysis['above_vwap']:
         score += w_vwap
         breakdown['VWAP'] = w_vwap
@@ -174,7 +158,6 @@ def analyze_market_structure(df, spy_df):
     analysis['score'] = score
     analysis['breakdown'] = breakdown
     
-    # 🎯 محرك الإشارات فصيلة الفصل والفرز
     if last_close > recent_highs and analysis['vol_surge']:
         analysis['signal_type'] = "اختراق مؤكد ومثبت"
     elif last_close > recent_highs:
@@ -241,3 +224,12 @@ if st.button("🚀 ابدأ مسح الرادار الفني وقراءة الش
                             results.append({
                                 "الرمز": ticker,
                                 "السعر الحالي ($)": round(entry_price, 2),
+                                "نوع الإشارة الفنية": analysis['signal_type'],
+                                "التقييم الرقمي (100)": analysis['score'],
+                                "وقف الخسارة ($)": round(stop_loss, 2),
+                                "الهدف الأول ($)": round(target_1, 2),
+                                "الهدف الثاني ($)": round(target_2, 2),
+                                "العائد للمخاطرة R": round(reward_risk_ratio, 2),
+                                "سبب التوصية": f"انكماش التقلبات وقرب السعر من المقاومة بنسبة {round(analysis['pct_to_resistance'], 1)}%"
+                            })
+                except:
